@@ -13,6 +13,13 @@ class user
 {
     public $mylog;
 
+    private $db_host;
+    private $db_name;
+    private $db_user;
+    private $db_pass;
+
+    private $db;
+
     /**
      * Constructor
      * Initializes event log
@@ -20,7 +27,25 @@ class user
     function __construct()
     {
         $this->mylog = new mylog;
+
+        // DB details from config.php
+        // This is usually a *bad* idea, this kind of thing should only be in one place, so not here.
+        $this->db_host = 'localhost';
+        $this->db_name = 'sql_collabtive_db';
+        $this->db_user = 'sql_collabuser';
+        $this->db_pass = 'sql_collabPW';
+
+        $this->db = new mysqli($this->db_host, $this->db_user, $this->db_pass, $this->db_name);
     }
+
+    /**
+     * Constructor
+     * Initializes event log
+     */
+    function __destruct()
+    {
+        $this->db->close();
+    }    
 
     /**
      * Creates a user
@@ -81,41 +106,28 @@ class user
      */
     function edit($id, $name, $realname, $email, $tel1, $tel2, $company, $zip, $gender, $url, $address1, $address2, $state, $country, $tags, $locale, $avatar = "", $rate = 0.0)
     {
-        $name = mysql_real_escape_string($name);
-        $realname = mysql_real_escape_string($realname);
-		//$company = mysql_real_escape_string($company);  //modified for SQL Lab
-        $email = mysql_real_escape_string($email);
-        $tel1 = mysql_real_escape_string($tel1);
-        $tel2 = mysql_real_escape_string($tel2);
-        $zip = mysql_real_escape_string($zip);
-        $gender = mysql_real_escape_string($gender);
-        $url = mysql_real_escape_string($url);
-        $address1 = mysql_real_escape_string($address1);
-        $address2 = mysql_real_escape_string($address2);
-        $state = mysql_real_escape_string($state);
-        $country = mysql_real_escape_string($country);
-        $tags = mysql_real_escape_string($tags);
-        $locale = mysql_real_escape_string($locale);
-        $avatar = mysql_real_escape_string($avatar);
-
         $rate = (float) $rate;
         $id = (int) $id;
 
         if ($avatar != "")
         {
-            $upd = mysql_query("UPDATE user SET name='$name',email='$email',tel1='$tel1', tel2='$tel2',company='$company',zip='$zip',gender='$gender',url='$url',adress='$address1',adress2='$address2',state='$state',country='$country',tags='$tags',locale='$locale',avatar='$avatar',rate='$rate' WHERE ID = $id");
+            $stmt = $this->db->prepare("UPDATE user SET name=?,email=?,tel1=?,tel2=?,company=?,zip=?,gender=?,url=?,adress=?,adress2=?,state=?,country=?,tags=?,locale=?,avatar=?,rate=? WHERE ID = ?");
+            $stmt->bind_param("sssssssssssssssdi", $name, $email, $tel1, $tel2, $company, $zip, $gender, $url, $address1, $address2, $state, $country, $tags, $locale, $avatar, $rate, $id);
         }
         else
         {
-            $upd = mysql_query("UPDATE user SET name='$name',email='$email', tel1='$tel1', tel2='$tel2', company='$company',zip='$zip',gender='$gender',url='$url',adress='$address1',adress2='$address2',state='$state',country='$country',tags='$tags',locale='$locale',rate='$rate' WHERE ID = $id");
+            $stmt = $this->db->prepare("UPDATE user SET name=?,email=?,tel1=?,tel2=?,company=?,zip=?,gender=?,url=?,adress=?,adress2=?,state=?,country=?,tags=?,locale=?,rate=? WHERE ID = ?");
+            $stmt->bind_param("ssssssssssssssdi", $name, $email, $tel1, $tel2, $company, $zip, $gender, $url, $address1, $address2, $state, $country, $tags, $locale, $rate, $id);
         }
-        if ($upd)
+        if ($stmt->execute())
         {
             $this->mylog->add($name, 'user', 2, 0);
+            $stmt->close();
             return true;
         }
         else
         {
+            $stmt->close();
             return false;
         }
     }
@@ -365,22 +377,24 @@ else
             return false;
         }
 
-        //$user = mysql_real_escape_string($user);  //modified for SQL Lab
-        //$pass = mysql_real_escape_string($pass);  //modified for SQL Lab
         $pass = sha1($pass);
 
-        $sel1 = mysql_query("SELECT ID,name,locale,lastlogin,gender FROM user WHERE (name = '$user' OR email = '$user') AND pass = '$pass'");
-        $chk = mysql_fetch_array($sel1);
-        if ($chk["ID"] != "")
+        $stmt = $db->prepare("SELECT ID,name,locale,lastlogin,gender FROM user WHERE (name = ? OR email = ?) AND pass = ?");
+        $stmt->bind_param("sss", $user, $user, $pass);
+        $stmt->execute();
+
+        $stmt->bind_result($bind_ID, $bind_name, $bind_locale, $bind_lastlogin, $bind_gender);
+
+        if ($stmt->fetch())
         {
             $rolesobj = new roles();
             $now = time();
-            $_SESSION['userid'] = $chk['ID'];
-            $_SESSION['username'] = stripslashes($chk['name']);
+            $_SESSION['userid'] = $bind_ID;
+            $_SESSION['username'] = stripslashes($bind_name);
             $_SESSION['lastlogin'] = $now;
-            $_SESSION['userlocale'] = $chk['locale'];
-            $_SESSION['usergender'] = $chk['gender'];
-            $_SESSION["userpermissions"] = $rolesobj->getUserRole($chk["ID"]);
+            $_SESSION['userlocale'] = $bind_locale;
+            $_SESSION['usergender'] = $bind_gender;
+            $_SESSION["userpermissions"] = $rolesobj->getUserRole($bind_ID);
 
             $userid = $_SESSION['userid'];
             $seid = session_id();
@@ -390,11 +404,18 @@ else
             {
                 setcookie("PHPSESSID", "$seid", time() + 14 * 24 * 3600);
             }
-            $upd1 = mysql_query("UPDATE user SET lastlogin = '$now' WHERE ID = $userid");
+
+            $upstmt = $this->db->prepare("UPDATE user SET lastlogin = ? WHERE ID = ?");
+            $upstmt->bind_param("ii", $now, $userid);
+            $upstmt->execute();
+
+            $stmt->close();
+            $upstmt->close();
             return true;
         }
         else
         {
+            $stmt->close();
             return false;
         }
     }
