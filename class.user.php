@@ -83,7 +83,7 @@ class user
     {
         $name = mysql_real_escape_string($name);
         $realname = mysql_real_escape_string($realname);
-		//$company = mysql_real_escape_string($company);  //modified for SQL Lab
+		$company = mysql_real_escape_string($company);
         $email = mysql_real_escape_string($email);
         $tel1 = mysql_real_escape_string($tel1);
         $tel2 = mysql_real_escape_string($tel2);
@@ -365,8 +365,8 @@ else
             return false;
         }
 
-        //$user = mysql_real_escape_string($user);  //modified for SQL Lab
-        //$pass = mysql_real_escape_string($pass);  //modified for SQL Lab
+        $user = mysql_real_escape_string($user);
+        $pass = mysql_real_escape_string($pass);
         $pass = sha1($pass);
 
         $sel1 = mysql_query("SELECT ID,name,locale,lastlogin,gender FROM user WHERE (name = '$user' OR email = '$user') AND pass = '$pass'");
