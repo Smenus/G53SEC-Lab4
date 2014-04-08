@@ -379,7 +379,7 @@ else
 
         $pass = sha1($pass);
 
-        $stmt = $db->prepare("SELECT ID,name,locale,lastlogin,gender FROM user WHERE (name = ? OR email = ?) AND pass = ?");
+        $stmt = $this->db->prepare("SELECT ID,name,locale,lastlogin,gender FROM user WHERE (name = ? OR email = ?) AND pass = ?");
         $stmt->bind_param("sss", $user, $user, $pass);
         $stmt->execute();
 
@@ -405,11 +405,12 @@ else
                 setcookie("PHPSESSID", "$seid", time() + 14 * 24 * 3600);
             }
 
+            $stmt->close();
+
             $upstmt = $this->db->prepare("UPDATE user SET lastlogin = ? WHERE ID = ?");
             $upstmt->bind_param("ii", $now, $userid);
             $upstmt->execute();
 
-            $stmt->close();
             $upstmt->close();
             return true;
         }
